@@ -1,24 +1,40 @@
+"""
+📌 Critical Path Method (CPM) Analyzer
+Author: Gabriel Santos Pereira
+
+This script implements the Critical Path Method (CPM).
+It reads a CSV file containing tasks, their durations, and predecessors,
+calculates the earliest and latest start/finish times, identifies slack,
+and determines the critical path — the sequence of tasks that cannot be delayed
+without affecting the overall project duration.
+
+The code is applied to a real-world example from the company Vallourec, 
+in the context of optimizing the production of seamless steel tubes.
+"""
+
 import pandas as pd
 import numpy as np
 
-# Print stars for formatting
+# Print stars for section formatting
 def stars(number):
     print("*" * number)
 
-# Error messages with debug
+# Error message when a task code is not found
 def errorCodeMsg(code):
     print(f"Error in input file : CODE - Code '{code}' not found")
     quit()
 
+# Error message when an invalid predecessor is found
 def errorPredMsg(pred):
     print(f"Error in input file : PREDECESSORS - Invalid predecessor '{pred}'")
     quit()
 
+# Error message for duration issues
 def errorDurMsg():
     print("Error in input file : DURATION ")
     quit()
 
-# Scans if the code in predecessors is in the list of task codes
+# Get index of task by its code
 def getTaskIndex(mydata, code):
     if pd.isna(code) or code == '':
         return None
@@ -27,7 +43,7 @@ def getTaskIndex(mydata, code):
     except IndexError:
         errorCodeMsg(code)
 
-# Critical Path Method Forward Pass
+# FORWARD PASS: Calculate Earliest Start (ES) and Earliest Finish (EF)
 def forwardPass(mydata):
     ntask = mydata.shape[0]
     ES = np.zeros(ntask, dtype=np.int32)
@@ -61,13 +77,13 @@ def forwardPass(mydata):
     mydata['EF'] = EF
     return mydata
 
-# Critical Path Method Backward Pass
+# BACKWARD PASS: Calculate Latest Start (LS) and Latest Finish (LF)
 def backwardPass(mydata):
     ntask = mydata.shape[0]
     LS = np.zeros(ntask, dtype=np.int32)
     LF = np.zeros(ntask, dtype=np.int32)
 
-    # Cria lista de sucessores
+    # Build successor list
     SUC = [[] for _ in range(ntask)]
     for i in range(ntask):
         preds = mydata['PRE'][i]
@@ -79,12 +95,13 @@ def backwardPass(mydata):
             if pred_idx is not None:
                 SUC[pred_idx].append(mydata['COD'][i])
 
-    # Inicializa tarefas finais (sem sucessores)
+    # Initialize terminal tasks (those with no successors)
     for i in range(ntask):
         if len(SUC[i]) == 0:
             LF[i] = mydata['EF'][i]
             LS[i] = LF[i] - mydata['DUR'][i]
 
+    # Iterative update for other tasks
     changed = True
     while changed:
         changed = False
@@ -107,42 +124,39 @@ def backwardPass(mydata):
     mydata['LF'] = LF
     return mydata
 
+# Calculate slack (LS - ES)
 def slack(mydata):
     mydata['SLACK'] = mydata['LS'] - mydata['ES']
     return mydata
 
+# Build the critical path string based on zero-slack activities
 def critical_path_string(mydata):
-    # Filtra atividades com slack = 0
     critical_activities = mydata[mydata['SLACK'] == 0]
-    
-    # Ordena pela coluna ES (início mais cedo)
     critical_activities = critical_activities.sort_values(by='ES')
-    
-    # Concatena os códigos
     path = ' -> '.join(critical_activities['COD'].tolist())
     return path
 
-# Wrapper function
+# Main wrapper function
 def computeCPM(mydata):
     mydata = forwardPass(mydata)
     mydata = backwardPass(mydata)
     mydata = slack(mydata)
     return mydata
 
-# Print function (adjusted for ES and EF only)
+# Output formatting
 def printTask(mydata):
     print("CRITICAL PATH METHOD CALCULATOR")
     stars(90)
     print("ES = Earliest Start; EF = Earliest Finish; LS = Latest Start; LF = Latest Finish")
     stars(90)
     print(mydata[['COD', 'PRE', 'DUR', 'ES', 'EF', 'LS', 'LF', 'SLACK']])
-    print(f"Tempo mínimo do projeto: {np.max(mydata['EF'])} dias")
-    print(f"Caminho crítico: {path}")
+    print(f"Minimum project duration: {np.max(mydata['EF'])} days")
+    print(f"Critical path: {path}")
     stars(90)
 
-# Main execution
+# Main execution block
 if __name__ == "__main__":
-    # Load data from CSV
+    # Read tasks from CSV file
     try:
         mydata = pd.read_csv('tasks.csv')
     except FileNotFoundError:
@@ -152,7 +166,7 @@ if __name__ == "__main__":
         print(f"Error loading CSV: {e}")
         quit()
 
-    # Compute and print CPM
+    # Run CPM calculation and display results
     result = computeCPM(mydata)
     path = critical_path_string(result)
     printTask(result)
